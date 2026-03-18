@@ -43,23 +43,32 @@ export async function handleUnstake(
     }
 
     if (args.dry_run) {
-      const populatedTx =
-        await sdk.withdraw.request.requestWithdrawalPopulateTx({
-          amount: value,
-          token,
-          account,
-        });
+      try {
+        const populatedTx =
+          await sdk.withdraw.request.requestWithdrawalPopulateTx({
+            amount: value,
+            token,
+            account,
+          });
 
-      return toolSuccess({
-        dryRun: true,
-        description: `Would request withdrawal of ${args.amount} ${token} via Lido queue`,
-        note: "Withdrawal is NOT instant. Typically takes 1-5 days to finalize.",
-        transaction: {
-          to: populatedTx.to,
-          from: populatedTx.from,
-          data: populatedTx.data,
-        },
-      });
+        return toolSuccess({
+          dryRun: true,
+          description: `Would request withdrawal of ${args.amount} ${token} via Lido queue`,
+          note: "Withdrawal is NOT instant. Typically takes 1-5 days to finalize.",
+          transaction: {
+            to: populatedTx.to,
+            from: populatedTx.from,
+            data: populatedTx.data,
+          },
+        });
+      } catch (txError) {
+        return toolSuccess({
+          dryRun: true,
+          description: `Would request withdrawal of ${args.amount} ${token} via Lido queue`,
+          note: "Withdrawal is NOT instant. Typically takes 1-5 days to finalize.",
+          warning: `Could not populate tx: ${txError instanceof Error ? txError.message : String(txError)}`,
+        });
+      }
     }
 
     const tx = await sdk.withdraw.request.requestWithdrawalWithPermit({

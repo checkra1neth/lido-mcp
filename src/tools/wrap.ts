@@ -28,37 +28,57 @@ export async function handleWrap(
 
     if (args.dry_run) {
       if (fromETH) {
-        const populatedTx = await sdk.wrap.wrapEthPopulateTx({
+        try {
+          const populatedTx = await sdk.wrap.wrapEthPopulateTx({
+            value,
+            account,
+          });
+          return toolSuccess({
+            dryRun: true,
+            description: `Would wrap ${formatEthAmount(value)} → ~${formatWstethAmount(expectedWsteth)}`,
+            note: "ETH→wstETH is atomic: stakes ETH and wraps in one transaction",
+            transaction: {
+              to: populatedTx.to,
+              from: populatedTx.from,
+              value: populatedTx.value?.toString(),
+              data: populatedTx.data,
+            },
+          });
+        } catch (txError) {
+          // populateTx may fail due to gas estimation (insufficient funds etc.)
+          // Return preview without tx details
+          return toolSuccess({
+            dryRun: true,
+            description: `Would wrap ${formatEthAmount(value)} → ~${formatWstethAmount(expectedWsteth)}`,
+            note: "ETH→wstETH is atomic: stakes ETH and wraps in one transaction",
+            warning: `Could not populate tx: ${txError instanceof Error ? txError.message : String(txError)}`,
+          });
+        }
+      }
+
+      try {
+        const populatedTx = await sdk.wrap.wrapStethPopulateTx({
           value,
           account,
         });
         return toolSuccess({
           dryRun: true,
-          description: `Would wrap ${formatEthAmount(value)} → ~${formatWstethAmount(expectedWsteth)}`,
-          note: "ETH→wstETH is atomic: stakes ETH and wraps in one transaction",
+          description: `Would wrap ${formatStethAmount(value)} → ~${formatWstethAmount(expectedWsteth)}`,
+          note: "Requires stETH approval for the wstETH contract first",
           transaction: {
             to: populatedTx.to,
             from: populatedTx.from,
-            value: populatedTx.value?.toString(),
             data: populatedTx.data,
           },
         });
+      } catch (txError) {
+        return toolSuccess({
+          dryRun: true,
+          description: `Would wrap ${formatStethAmount(value)} → ~${formatWstethAmount(expectedWsteth)}`,
+          note: "Requires stETH approval for the wstETH contract first",
+          warning: `Could not populate tx: ${txError instanceof Error ? txError.message : String(txError)}`,
+        });
       }
-
-      const populatedTx = await sdk.wrap.wrapStethPopulateTx({
-        value,
-        account,
-      });
-      return toolSuccess({
-        dryRun: true,
-        description: `Would wrap ${formatStethAmount(value)} → ~${formatWstethAmount(expectedWsteth)}`,
-        note: "Requires stETH approval for the wstETH contract first",
-        transaction: {
-          to: populatedTx.to,
-          from: populatedTx.from,
-          data: populatedTx.data,
-        },
-      });
     }
 
     if (fromETH) {

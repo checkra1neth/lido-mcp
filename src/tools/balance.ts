@@ -1,4 +1,7 @@
-import { type LidoSDK } from "@lidofinance/lido-ethereum-sdk";
+import {
+  type LidoSDK,
+  APPROX_BLOCKS_BY_DAY,
+} from "@lidofinance/lido-ethereum-sdk";
 import {
   type ToolResponse,
   formatApr,
@@ -68,7 +71,8 @@ export async function handleRewards(
       fromBlock = BigInt(args.from_block);
     } else {
       const latestBlock = await sdk.core.rpcProvider.getBlockNumber();
-      fromBlock = BigInt(latestBlock) - 216000n;
+      // Use SDK constant: ~7600 blocks/day × 30 days
+      fromBlock = BigInt(latestBlock) - APPROX_BLOCKS_BY_DAY * 30n;
       if (fromBlock < 0n) fromBlock = 0n;
     }
 
@@ -103,16 +107,59 @@ export async function handleRewards(
   }
 }
 
+async function fetchAprFromLidoApi(): Promise<{
+  lastApr: number;
+  smaApr: number;
+}> {
+  const [lastRes, smaRes] = await Promise.all([
+    fetch("https://eth-api.lido.fi/v1/protocol/steth/apr/last"),
+    fetch("https://eth-api.lido.fi/v1/protocol/steth/apr/sma"),
+  ]);
+
+  if (!lastRes.ok || !smaRes.ok) {
+    throw new Error("Lido API request failed");
+  }
+
+  const lastData = (await lastRes.json()) as {
+    data: { apr: number };
+  };
+  const smaData = (await smaRes.json()) as {
+    data: { smaApr: number };
+  };
+
+  return {
+    lastApr: lastData.data.apr,
+    smaApr: smaData.data.smaApr,
+  };
+}
+
 export async function handleApr(sdk: LidoSDK): Promise<ToolResponse> {
   try {
-    const [lastApr, smaApr] = await Promise.all([
-      sdk.statistics.apr.getLastApr(),
-      sdk.statistics.apr.getSmaApr({ days: 7 }),
-    ]);
+    // Try SDK first (uses eth_getLogs, may fail on rate-limited RPCs)
+    try {
+      const [lastApr, smaApr] = await Promise.all([
+        sdk.statistics.apr.getLastApr(),
+        sdk.statistics.apr.getSmaApr({ days: 7 }),
+      ]);
+
+      return toolSuccess({
+        currentAPR: formatApr(lastApr),
+        sevenDayAvgAPR: formatApr(smaApr),
+        source: "on-chain (via Lido SDK)",
+        description:
+          "APR represents the annualized return from staking ETH via Lido. The 7-day SMA smooths out short-term fluctuations.",
+      });
+    } catch {
+      // SDK failed (likely rate-limited RPC), fall back to Lido HTTP API
+    }
+
+    // Fallback: Lido public HTTP API (https://eth-api.lido.fi)
+    const { lastApr, smaApr } = await fetchAprFromLidoApi();
 
     return toolSuccess({
       currentAPR: formatApr(lastApr),
       sevenDayAvgAPR: formatApr(smaApr),
+      source: "Lido HTTP API (eth-api.lido.fi)",
       description:
         "APR represents the annualized return from staking ETH via Lido. The 7-day SMA smooths out short-term fluctuations.",
     });

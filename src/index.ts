@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 
+// Prevent unhandled rejections from crashing the server
+process.on("unhandledRejection", (reason) => {
+  console.error("[lido-mcp] Unhandled rejection:", reason);
+});
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { LidoSDK } from "@lidofinance/lido-ethereum-sdk";

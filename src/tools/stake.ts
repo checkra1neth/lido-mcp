@@ -33,28 +33,41 @@ export async function handleStake(
     }
 
     if (args.dry_run) {
-      const populatedTx = await sdk.stake.stakeEthPopulateTx({
-        value,
-        account,
-        referralAddress: args.referral
-          ? validateAddress(args.referral)
-          : undefined,
-      });
+      try {
+        const populatedTx = await sdk.stake.stakeEthPopulateTx({
+          value,
+          account,
+          referralAddress: args.referral
+            ? validateAddress(args.referral)
+            : undefined,
+        });
 
-      return toolSuccess({
-        dryRun: true,
-        description: `Would stake ${formatEthAmount(value)} to receive stETH`,
-        transaction: {
-          to: populatedTx.to,
-          from: populatedTx.from,
-          value: populatedTx.value?.toString(),
-          data: populatedTx.data,
-        },
-        stakingLimits: {
-          currentLimit: formatEthAmount(limits.currentStakeLimit),
-          maxLimit: formatEthAmount(limits.maxStakeLimit),
-        },
-      });
+        return toolSuccess({
+          dryRun: true,
+          description: `Would stake ${formatEthAmount(value)} to receive stETH`,
+          transaction: {
+            to: populatedTx.to,
+            from: populatedTx.from,
+            value: populatedTx.value?.toString(),
+            data: populatedTx.data,
+          },
+          stakingLimits: {
+            currentLimit: formatEthAmount(limits.currentStakeLimit),
+            maxLimit: formatEthAmount(limits.maxStakeLimit),
+          },
+        });
+      } catch (txError) {
+        // populateTx may fail due to gas estimation on insufficient balance
+        return toolSuccess({
+          dryRun: true,
+          description: `Would stake ${formatEthAmount(value)} to receive stETH`,
+          stakingLimits: {
+            currentLimit: formatEthAmount(limits.currentStakeLimit),
+            maxLimit: formatEthAmount(limits.maxStakeLimit),
+          },
+          warning: `Could not populate tx: ${txError instanceof Error ? txError.message : String(txError)}`,
+        });
+      }
     }
 
     const tx = await sdk.stake.stakeEth({
