@@ -2,6 +2,8 @@
 
 A Model Context Protocol (MCP) server that enables AI agents to interact with the [Lido](https://lido.fi) liquid staking protocol on Ethereum. Stake ETH, manage stETH/wstETH positions, track rewards, and participate in governance — all through natural language.
 
+![Demo](demo.gif)
+
 ## Features
 
 - **Stake ETH** → receive stETH (rebasing liquid staking token)
