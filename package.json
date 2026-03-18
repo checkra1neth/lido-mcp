@@ -1,0 +1,35 @@
+{
+  "name": "lido-mcp",
+  "version": "1.0.0",
+  "description": "Lido MCP Server — enabling AI agents to stake ETH, manage positions, and participate in Lido governance",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "lido",
+    "mcp",
+    "staking",
+    "ethereum",
+    "stETH",
+    "wstETH"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@lidofinance/lido-ethereum-sdk": "^3.0.0",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "viem": "^2.21.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
