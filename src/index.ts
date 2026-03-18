@@ -73,14 +73,6 @@ const sdk = new LidoSDK({
   web3Provider: walletClient,
 });
 
-function requireWallet(): WalletClient {
-  if (!walletClient) {
-    throw new Error(
-      "Wallet not configured. Set LIDO_PRIVATE_KEY or ETH_PRIVATE_KEY to enable write operations.",
-    );
-  }
-  return walletClient;
-}
 
 // Create MCP server
 const server = new McpServer({
@@ -163,16 +155,7 @@ server.tool(
       .optional()
       .describe("Simulate without executing (default: false)"),
   },
-  async (args) => {
-    try {
-      if (!args.dry_run) requireWallet();
-      return await handleStake(sdk, args);
-    } catch (error) {
-      return toolError(
-        error instanceof Error ? error.message : String(error),
-      );
-    }
-  },
+  async (args) => handleStake(sdk, publicClient, walletClient, args),
 );
 
 server.tool(
@@ -189,16 +172,7 @@ server.tool(
       .describe("Ethereum address requesting withdrawal"),
     dry_run: z.boolean().optional().describe("Simulate without executing"),
   },
-  async (args) => {
-    try {
-      if (!args.dry_run) requireWallet();
-      return await handleUnstake(sdk, args);
-    } catch (error) {
-      return toolError(
-        error instanceof Error ? error.message : String(error),
-      );
-    }
-  },
+  async (args) => handleUnstake(sdk, publicClient, walletClient, args),
 );
 
 server.tool(
@@ -214,16 +188,8 @@ server.tool(
       ),
     dry_run: z.boolean().optional().describe("Simulate without executing"),
   },
-  async (args) => {
-    try {
-      if (!args.dry_run) requireWallet();
-      return await handleClaimWithdrawal(sdk, args);
-    } catch (error) {
-      return toolError(
-        error instanceof Error ? error.message : String(error),
-      );
-    }
-  },
+  async (args) =>
+    handleClaimWithdrawal(sdk, publicClient, walletClient, args),
 );
 
 server.tool(
@@ -238,16 +204,7 @@ server.tool(
     account: z.string().describe("Ethereum address"),
     dry_run: z.boolean().optional().describe("Simulate without executing"),
   },
-  async (args) => {
-    try {
-      if (!args.dry_run) requireWallet();
-      return await handleWrap(sdk, args);
-    } catch (error) {
-      return toolError(
-        error instanceof Error ? error.message : String(error),
-      );
-    }
-  },
+  async (args) => handleWrap(sdk, publicClient, walletClient, args),
 );
 
 server.tool(
@@ -258,16 +215,7 @@ server.tool(
     account: z.string().describe("Ethereum address"),
     dry_run: z.boolean().optional().describe("Simulate without executing"),
   },
-  async (args) => {
-    try {
-      if (!args.dry_run) requireWallet();
-      return await handleUnwrap(sdk, args);
-    } catch (error) {
-      return toolError(
-        error instanceof Error ? error.message : String(error),
-      );
-    }
-  },
+  async (args) => handleUnwrap(sdk, publicClient, walletClient, args),
 );
 
 server.tool(
@@ -284,19 +232,12 @@ server.tool(
     dry_run: z.boolean().optional().describe("Simulate without executing"),
   },
   async (args) => {
-    try {
-      const wc = requireWallet();
-      return await handleGovernanceVote(
-        publicClient,
-        wc,
-        networkConfig,
-        args,
-      );
-    } catch (error) {
+    if (!walletClient) {
       return toolError(
-        error instanceof Error ? error.message : String(error),
+        "Wallet not configured. Set LIDO_PRIVATE_KEY to enable write operations.",
       );
     }
+    return handleGovernanceVote(publicClient, walletClient, networkConfig, args);
   },
 );
 

@@ -1,4 +1,5 @@
 import { type LidoSDK } from "@lidofinance/lido-ethereum-sdk";
+import { type WalletClient, type PublicClient } from "viem";
 import {
   type ToolResponse,
   formatEthAmount,
@@ -12,6 +13,8 @@ import {
 
 export async function handleWrap(
   sdk: LidoSDK,
+  publicClient: PublicClient,
+  walletClient: WalletClient | undefined,
   args: {
     amount: string;
     source?: string;
@@ -28,113 +31,108 @@ export async function handleWrap(
 
     if (args.dry_run) {
       if (fromETH) {
-        try {
-          const populatedTx = await sdk.wrap.wrapEthPopulateTx({
-            value,
-            account,
-          });
-          return toolSuccess({
-            dryRun: true,
-            description: `Would wrap ${formatEthAmount(value)} → ~${formatWstethAmount(expectedWsteth)}`,
-            note: "ETH→wstETH is atomic: stakes ETH and wraps in one transaction",
-            transaction: {
-              to: populatedTx.to,
-              from: populatedTx.from,
-              value: populatedTx.value?.toString(),
-              data: populatedTx.data,
-            },
-          });
-        } catch (txError) {
-          // populateTx may fail due to gas estimation (insufficient funds etc.)
-          // Return preview without tx details
-          return toolSuccess({
-            dryRun: true,
-            description: `Would wrap ${formatEthAmount(value)} → ~${formatWstethAmount(expectedWsteth)}`,
-            note: "ETH→wstETH is atomic: stakes ETH and wraps in one transaction",
-            warning: `Could not populate tx: ${txError instanceof Error ? txError.message : String(txError)}`,
-          });
-        }
-      }
-
-      try {
-        const populatedTx = await sdk.wrap.wrapStethPopulateTx({
+        const populatedTx = await sdk.wrap.wrapEthPopulateTx({
           value,
           account,
         });
         return toolSuccess({
           dryRun: true,
-          description: `Would wrap ${formatStethAmount(value)} → ~${formatWstethAmount(expectedWsteth)}`,
-          note: "Requires stETH approval for the wstETH contract first",
+          description: `Would wrap ${formatEthAmount(value)} → ~${formatWstethAmount(expectedWsteth)}`,
+          note: "ETH→wstETH is atomic: stakes ETH and wraps in one transaction",
           transaction: {
             to: populatedTx.to,
             from: populatedTx.from,
+            value: populatedTx.value?.toString(),
             data: populatedTx.data,
           },
         });
-      } catch (txError) {
-        return toolSuccess({
-          dryRun: true,
-          description: `Would wrap ${formatStethAmount(value)} → ~${formatWstethAmount(expectedWsteth)}`,
-          note: "Requires stETH approval for the wstETH contract first",
-          warning: `Could not populate tx: ${txError instanceof Error ? txError.message : String(txError)}`,
-        });
       }
+
+      const populatedTx = await sdk.wrap.wrapStethPopulateTx({
+        value,
+        account,
+      });
+      return toolSuccess({
+        dryRun: true,
+        description: `Would wrap ${formatStethAmount(value)} → ~${formatWstethAmount(expectedWsteth)}`,
+        note: "Requires stETH approval for the wstETH contract first",
+        transaction: {
+          to: populatedTx.to,
+          from: populatedTx.from,
+          data: populatedTx.data,
+        },
+      });
+    }
+
+    if (!walletClient?.account) {
+      return toolError(
+        "Wallet not configured. Set LIDO_PRIVATE_KEY to enable write operations.",
+      );
     }
 
     if (fromETH) {
-      const tx = await sdk.wrap.wrapEth({
+      const populatedTx = await sdk.wrap.wrapEthPopulateTx({
         value,
         account,
-        callback: ({ stage }) => {
-          if (stage === "sign")
-            console.error("[lido_wrap] Waiting for signature...");
-        },
       });
+
+      const hash = await walletClient.sendTransaction({
+        to: populatedTx.to as `0x${string}`,
+        data: populatedTx.data as `0x${string}`,
+        value: populatedTx.value ?? 0n,
+        account: walletClient.account,
+        chain: walletClient.chain,
+      });
+
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
       return toolSuccess({
         dryRun: false,
-        transactionHash: tx.hash,
+        transactionHash: hash,
         description: `Wrapped ${formatEthAmount(value)} → wstETH`,
         details: {
-          stethWrapped: tx.result
-            ? formatStethAmount(tx.result.stethWrapped)
-            : "unknown",
-          wstethReceived: tx.result
-            ? formatWstethAmount(tx.result.wstethReceived)
-            : "unknown",
+          status: receipt.status,
+          blockNumber: receipt.blockNumber.toString(),
         },
       });
     }
 
     // stETH → wstETH: approve then wrap
-    await sdk.wrap.approveStethForWrap({
+    const approveTx = await sdk.wrap.approveStethForWrapPopulateTx({
       value,
       account,
-      callback: ({ stage }) => {
-        if (stage === "sign")
-          console.error("[lido_wrap] Approving stETH spend...");
-      },
     });
 
-    const tx = await sdk.wrap.wrapSteth({
+    const approveHash = await walletClient.sendTransaction({
+      to: approveTx.to as `0x${string}`,
+      data: approveTx.data as `0x${string}`,
+      account: walletClient.account,
+      chain: walletClient.chain,
+    });
+
+    await publicClient.waitForTransactionReceipt({ hash: approveHash });
+
+    const wrapTx = await sdk.wrap.wrapStethPopulateTx({
       value,
       account,
-      callback: ({ stage }) => {
-        if (stage === "sign")
-          console.error("[lido_wrap] Wrapping stETH...");
-      },
     });
+
+    const hash = await walletClient.sendTransaction({
+      to: wrapTx.to as `0x${string}`,
+      data: wrapTx.data as `0x${string}`,
+      account: walletClient.account,
+      chain: walletClient.chain,
+    });
+
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
     return toolSuccess({
       dryRun: false,
-      transactionHash: tx.hash,
+      transactionHash: hash,
       description: `Wrapped ${formatStethAmount(value)} → wstETH`,
       details: {
-        stethWrapped: tx.result
-          ? formatStethAmount(tx.result.stethWrapped)
-          : "unknown",
-        wstethReceived: tx.result
-          ? formatWstethAmount(tx.result.wstethReceived)
-          : "unknown",
+        status: receipt.status,
+        blockNumber: receipt.blockNumber.toString(),
       },
     });
   } catch (error) {
@@ -144,6 +142,8 @@ export async function handleWrap(
 
 export async function handleUnwrap(
   sdk: LidoSDK,
+  publicClient: PublicClient,
+  walletClient: WalletClient | undefined,
   args: {
     amount: string;
     account: string;
@@ -172,26 +172,33 @@ export async function handleUnwrap(
       });
     }
 
-    const tx = await sdk.wrap.unwrap({
+    if (!walletClient?.account) {
+      return toolError(
+        "Wallet not configured. Set LIDO_PRIVATE_KEY to enable write operations.",
+      );
+    }
+
+    const populatedTx = await sdk.wrap.unwrapPopulateTx({
       value,
       account,
-      callback: ({ stage }) => {
-        if (stage === "sign")
-          console.error("[lido_unwrap] Waiting for signature...");
-      },
     });
+
+    const hash = await walletClient.sendTransaction({
+      to: populatedTx.to as `0x${string}`,
+      data: populatedTx.data as `0x${string}`,
+      account: walletClient.account,
+      chain: walletClient.chain,
+    });
+
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
     return toolSuccess({
       dryRun: false,
-      transactionHash: tx.hash,
+      transactionHash: hash,
       description: `Unwrapped ${formatWstethAmount(value)} → stETH`,
       details: {
-        wstethUnwrapped: tx.result
-          ? formatWstethAmount(tx.result.wstethUnwrapped)
-          : "unknown",
-        stethReceived: tx.result
-          ? formatStethAmount(tx.result.stethReceived)
-          : "unknown",
+        status: receipt.status,
+        blockNumber: receipt.blockNumber.toString(),
       },
     });
   } catch (error) {

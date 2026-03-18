@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { type LidoSDK } from "@lidofinance/lido-ethereum-sdk";
+import { type PublicClient, type WalletClient } from "viem";
 import { handleStake } from "../../src/tools/stake.js";
 import {
   handleUnstake,
@@ -10,6 +11,24 @@ import { handleWrap, handleUnwrap } from "../../src/tools/wrap.js";
 import { handleBalance, handleApr } from "../../src/tools/balance.js";
 
 const VALID_ACCOUNT = "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84";
+
+function createMockPublicClient(): PublicClient {
+  return {
+    waitForTransactionReceipt: vi.fn().mockResolvedValue({
+      status: "success",
+      blockNumber: 12345678n,
+      gasUsed: 21000n,
+    }),
+  } as unknown as PublicClient;
+}
+
+function createMockWalletClient(): WalletClient {
+  return {
+    account: { address: VALID_ACCOUNT },
+    chain: { id: 1 },
+    sendTransaction: vi.fn().mockResolvedValue("0xmocktxhash"),
+  } as unknown as WalletClient;
+}
 
 function createMockSdk() {
   return {
@@ -37,6 +56,9 @@ function createMockSdk() {
       claim: {
         claimRequests: vi.fn(),
       },
+      approval: {
+        approvePopulateTx: vi.fn(),
+      },
     },
     wrap: {
       convertStethToWsteth: vi.fn(),
@@ -48,6 +70,7 @@ function createMockSdk() {
       wrapSteth: vi.fn(),
       unwrap: vi.fn(),
       approveStethForWrap: vi.fn(),
+      approveStethForWrapPopulateTx: vi.fn(),
     },
     core: {
       balanceETH: vi.fn(),
@@ -110,7 +133,7 @@ describe("handleStake", () => {
       data: "0xabcdef",
     });
 
-    const result = await handleStake(sdk, {
+    const result = await handleStake(sdk, undefined as unknown as PublicClient, undefined, {
       amount: "1",
       account: VALID_ACCOUNT,
       dry_run: true,
@@ -136,7 +159,7 @@ describe("handleStake", () => {
       maxStakeLimit: 0n,
     });
 
-    const result = await handleStake(sdk, {
+    const result = await handleStake(sdk, undefined as unknown as PublicClient, undefined, {
       amount: "1",
       account: VALID_ACCOUNT,
     });
@@ -156,7 +179,7 @@ describe("handleStake", () => {
       maxStakeLimit: 1000000000000000000n,
     });
 
-    const result = await handleStake(sdk, {
+    const result = await handleStake(sdk, undefined as unknown as PublicClient, undefined, {
       amount: "1",
       account: VALID_ACCOUNT,
     });
@@ -166,7 +189,7 @@ describe("handleStake", () => {
   });
 
   it("returns error on invalid address", async () => {
-    const result = await handleStake(sdk, {
+    const result = await handleStake(sdk, undefined as unknown as PublicClient, undefined, {
       amount: "1",
       account: "invalid-address",
     });
@@ -184,7 +207,7 @@ describe("handleStake", () => {
       new Error("network failure"),
     );
 
-    const result = await handleStake(sdk, {
+    const result = await handleStake(sdk, undefined as unknown as PublicClient, undefined, {
       amount: "1",
       account: VALID_ACCOUNT,
     });
@@ -197,7 +220,7 @@ describe("handleStake", () => {
     const mockSdk = sdk as unknown as {
       stake: {
         getStakeLimitInfo: ReturnType<typeof vi.fn>;
-        stakeEth: ReturnType<typeof vi.fn>;
+        stakeEthPopulateTx: ReturnType<typeof vi.fn>;
       };
     };
 
@@ -207,15 +230,18 @@ describe("handleStake", () => {
       maxStakeLimit: 150000000000000000000n,
     });
 
-    mockSdk.stake.stakeEth.mockResolvedValue({
-      hash: "0xtxhash123",
-      result: {
-        stethReceived: 999000000000000000n,
-        sharesReceived: 900000000000000000n,
-      },
+    mockSdk.stake.stakeEthPopulateTx.mockResolvedValue({
+      to: "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
+      from: VALID_ACCOUNT,
+      value: 1000000000000000000n,
+      data: "0xabcdef",
     });
 
-    const result = await handleStake(sdk, {
+    const mockPublicClient = createMockPublicClient();
+    const mockWalletClient = createMockWalletClient();
+    (mockWalletClient as unknown as { sendTransaction: ReturnType<typeof vi.fn> }).sendTransaction.mockResolvedValue("0xtxhash123");
+
+    const result = await handleStake(sdk, mockPublicClient, mockWalletClient, {
       amount: "1",
       account: VALID_ACCOUNT,
       dry_run: false,
@@ -241,7 +267,7 @@ describe("handleUnstake", () => {
     };
     mockSdk.withdraw.views.isPaused.mockResolvedValue(true);
 
-    const result = await handleUnstake(sdk, {
+    const result = await handleUnstake(sdk, undefined as unknown as PublicClient, undefined, {
       amount: "1",
       account: VALID_ACCOUNT,
     });
@@ -264,7 +290,7 @@ describe("handleUnstake", () => {
       100000000000000000n,
     ); // 0.1 stETH
 
-    const result = await handleUnstake(sdk, {
+    const result = await handleUnstake(sdk, undefined as unknown as PublicClient, undefined, {
       amount: "0.01",
       account: VALID_ACCOUNT,
     });
@@ -296,7 +322,7 @@ describe("handleUnstake", () => {
       data: "0xdeadbeef",
     });
 
-    const result = await handleUnstake(sdk, {
+    const result = await handleUnstake(sdk, undefined as unknown as PublicClient, undefined, {
       amount: "1",
       account: VALID_ACCOUNT,
       dry_run: true,
@@ -389,7 +415,7 @@ describe("handleClaimWithdrawal", () => {
       },
     );
 
-    const result = await handleClaimWithdrawal(sdk, {
+    const result = await handleClaimWithdrawal(sdk, undefined as unknown as PublicClient, undefined, {
       account: VALID_ACCOUNT,
     });
 
@@ -414,7 +440,7 @@ describe("handleClaimWithdrawal", () => {
       },
     );
 
-    const result = await handleClaimWithdrawal(sdk, {
+    const result = await handleClaimWithdrawal(sdk, undefined as unknown as PublicClient, undefined, {
       account: VALID_ACCOUNT,
       dry_run: true,
     });
@@ -597,7 +623,7 @@ describe("handleWrap", () => {
       data: "0xwrapdata",
     });
 
-    const result = await handleWrap(sdk, {
+    const result = await handleWrap(sdk, undefined as unknown as PublicClient, undefined, {
       amount: "1",
       account: VALID_ACCOUNT,
       dry_run: true,
@@ -630,7 +656,7 @@ describe("handleWrap", () => {
       data: "0xwrapethdata",
     });
 
-    const result = await handleWrap(sdk, {
+    const result = await handleWrap(sdk, undefined as unknown as PublicClient, undefined, {
       amount: "1",
       source: "ETH",
       account: VALID_ACCOUNT,
@@ -645,7 +671,7 @@ describe("handleWrap", () => {
   });
 
   it("returns error on invalid address", async () => {
-    const result = await handleWrap(sdk, {
+    const result = await handleWrap(sdk, undefined as unknown as PublicClient, undefined, {
       amount: "1",
       account: "bad",
       dry_run: true,
@@ -664,7 +690,7 @@ describe("handleWrap", () => {
       new Error("contract error"),
     );
 
-    const result = await handleWrap(sdk, {
+    const result = await handleWrap(sdk, undefined as unknown as PublicClient, undefined, {
       amount: "1",
       account: VALID_ACCOUNT,
       dry_run: true,
@@ -699,7 +725,7 @@ describe("handleUnwrap", () => {
       data: "0xunwrapdata",
     });
 
-    const result = await handleUnwrap(sdk, {
+    const result = await handleUnwrap(sdk, undefined as unknown as PublicClient, undefined, {
       amount: "1",
       account: VALID_ACCOUNT,
       dry_run: true,
@@ -718,22 +744,24 @@ describe("handleUnwrap", () => {
     const mockSdk = sdk as unknown as {
       wrap: {
         convertWstethToSteth: ReturnType<typeof vi.fn>;
-        unwrap: ReturnType<typeof vi.fn>;
+        unwrapPopulateTx: ReturnType<typeof vi.fn>;
       };
     };
 
     mockSdk.wrap.convertWstethToSteth.mockResolvedValue(
       1100000000000000000n,
     );
-    mockSdk.wrap.unwrap.mockResolvedValue({
-      hash: "0xunwraphash",
-      result: {
-        wstethUnwrapped: 1000000000000000000n,
-        stethReceived: 1100000000000000000n,
-      },
+    mockSdk.wrap.unwrapPopulateTx.mockResolvedValue({
+      to: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
+      from: VALID_ACCOUNT,
+      data: "0xunwrapdata",
     });
 
-    const result = await handleUnwrap(sdk, {
+    const mockPublicClient = createMockPublicClient();
+    const mockWalletClient = createMockWalletClient();
+    (mockWalletClient as unknown as { sendTransaction: ReturnType<typeof vi.fn> }).sendTransaction.mockResolvedValue("0xunwraphash");
+
+    const result = await handleUnwrap(sdk, mockPublicClient, mockWalletClient, {
       amount: "1",
       account: VALID_ACCOUNT,
       dry_run: false,
@@ -754,7 +782,7 @@ describe("handleUnwrap", () => {
       new Error("gas estimation failed"),
     );
 
-    const result = await handleUnwrap(sdk, {
+    const result = await handleUnwrap(sdk, undefined as unknown as PublicClient, undefined, {
       amount: "1",
       account: VALID_ACCOUNT,
       dry_run: true,
@@ -765,7 +793,7 @@ describe("handleUnwrap", () => {
   });
 
   it("returns error on invalid address", async () => {
-    const result = await handleUnwrap(sdk, {
+    const result = await handleUnwrap(sdk, undefined as unknown as PublicClient, undefined, {
       amount: "1",
       account: "0xinvalid",
       dry_run: true,

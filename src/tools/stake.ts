@@ -1,8 +1,8 @@
 import { type LidoSDK } from "@lidofinance/lido-ethereum-sdk";
+import { type WalletClient, type PublicClient } from "viem";
 import {
   type ToolResponse,
   formatEthAmount,
-  formatStethAmount,
   parseEthValue,
   toolError,
   toolSuccess,
@@ -11,6 +11,8 @@ import {
 
 export async function handleStake(
   sdk: LidoSDK,
+  publicClient: PublicClient,
+  walletClient: WalletClient | undefined,
   args: {
     amount: string;
     account: string;
@@ -32,70 +34,58 @@ export async function handleStake(
       );
     }
 
-    if (args.dry_run) {
-      try {
-        const populatedTx = await sdk.stake.stakeEthPopulateTx({
-          value,
-          account,
-          referralAddress: args.referral
-            ? validateAddress(args.referral)
-            : undefined,
-        });
-
-        return toolSuccess({
-          dryRun: true,
-          description: `Would stake ${formatEthAmount(value)} to receive stETH`,
-          transaction: {
-            to: populatedTx.to,
-            from: populatedTx.from,
-            value: populatedTx.value?.toString(),
-            data: populatedTx.data,
-          },
-          stakingLimits: {
-            currentLimit: formatEthAmount(limits.currentStakeLimit),
-            maxLimit: formatEthAmount(limits.maxStakeLimit),
-          },
-        });
-      } catch (txError) {
-        // populateTx may fail due to gas estimation on insufficient balance
-        return toolSuccess({
-          dryRun: true,
-          description: `Would stake ${formatEthAmount(value)} to receive stETH`,
-          stakingLimits: {
-            currentLimit: formatEthAmount(limits.currentStakeLimit),
-            maxLimit: formatEthAmount(limits.maxStakeLimit),
-          },
-          warning: `Could not populate tx: ${txError instanceof Error ? txError.message : String(txError)}`,
-        });
-      }
-    }
-
-    const tx = await sdk.stake.stakeEth({
+    // Use SDK to populate tx (gets contract address, encodes calldata)
+    const populatedTx = await sdk.stake.stakeEthPopulateTx({
       value,
       account,
       referralAddress: args.referral
         ? validateAddress(args.referral)
         : undefined,
-      callback: ({ stage }) => {
-        if (stage === "sign") {
-          console.error("[lido_stake] Waiting for signature...");
-        } else if (stage === "receipt") {
-          console.error("[lido_stake] Transaction submitted...");
-        }
-      },
     });
+
+    if (args.dry_run) {
+      return toolSuccess({
+        dryRun: true,
+        description: `Would stake ${formatEthAmount(value)} to receive stETH`,
+        transaction: {
+          to: populatedTx.to,
+          from: populatedTx.from,
+          value: populatedTx.value?.toString(),
+          data: populatedTx.data,
+        },
+        stakingLimits: {
+          currentLimit: formatEthAmount(limits.currentStakeLimit),
+          maxLimit: formatEthAmount(limits.maxStakeLimit),
+        },
+      });
+    }
+
+    if (!walletClient?.account) {
+      return toolError(
+        "Wallet not configured. Set LIDO_PRIVATE_KEY to enable write operations.",
+      );
+    }
+
+    // Send via viem — uses proper EIP-1559 fee estimation (eth_maxPriorityFeePerGas)
+    // SDK's internal getFeeData uses eth_feeHistory which underestimates on low-activity chains
+    const hash = await walletClient.sendTransaction({
+      to: populatedTx.to as `0x${string}`,
+      data: populatedTx.data as `0x${string}`,
+      value: populatedTx.value ?? 0n,
+      account: walletClient.account,
+      chain: walletClient.chain,
+    });
+
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
     return toolSuccess({
       dryRun: false,
-      transactionHash: tx.hash,
+      transactionHash: hash,
       description: `Successfully staked ${formatEthAmount(value)}`,
       details: {
-        stethReceived: tx.result
-          ? formatStethAmount(tx.result.stethReceived)
-          : "unknown",
-        sharesReceived: tx.result
-          ? tx.result.sharesReceived.toString()
-          : "unknown",
+        status: receipt.status,
+        blockNumber: receipt.blockNumber.toString(),
+        gasUsed: receipt.gasUsed.toString(),
       },
     });
   } catch (error) {

@@ -1,4 +1,5 @@
 import { type LidoSDK } from "@lidofinance/lido-ethereum-sdk";
+import { type WalletClient, type PublicClient } from "viem";
 import {
   type ToolResponse,
   formatEthAmount,
@@ -12,6 +13,8 @@ import {
 
 export async function handleUnstake(
   sdk: LidoSDK,
+  publicClient: PublicClient,
+  walletClient: WalletClient | undefined,
   args: {
     amount: string;
     token?: string;
@@ -42,51 +45,66 @@ export async function handleUnstake(
       );
     }
 
-    if (args.dry_run) {
-      try {
-        const populatedTx =
-          await sdk.withdraw.request.requestWithdrawalPopulateTx({
-            amount: value,
-            token,
-            account,
-          });
+    const populatedTx =
+      await sdk.withdraw.request.requestWithdrawalPopulateTx({
+        amount: value,
+        token,
+        account,
+      });
 
-        return toolSuccess({
-          dryRun: true,
-          description: `Would request withdrawal of ${args.amount} ${token} via Lido queue`,
-          note: "Withdrawal is NOT instant. Typically takes 1-5 days to finalize.",
-          transaction: {
-            to: populatedTx.to,
-            from: populatedTx.from,
-            data: populatedTx.data,
-          },
-        });
-      } catch (txError) {
-        return toolSuccess({
-          dryRun: true,
-          description: `Would request withdrawal of ${args.amount} ${token} via Lido queue`,
-          note: "Withdrawal is NOT instant. Typically takes 1-5 days to finalize.",
-          warning: `Could not populate tx: ${txError instanceof Error ? txError.message : String(txError)}`,
-        });
-      }
+    if (args.dry_run) {
+      return toolSuccess({
+        dryRun: true,
+        description: `Would request withdrawal of ${args.amount} ${token} via Lido queue`,
+        note: "Withdrawal is NOT instant. Typically takes 1-5 days to finalize.",
+        transaction: {
+          to: populatedTx.to,
+          from: populatedTx.from,
+          data: populatedTx.data,
+        },
+      });
     }
 
-    const tx = await sdk.withdraw.request.requestWithdrawalWithPermit({
+    if (!walletClient?.account) {
+      return toolError(
+        "Wallet not configured. Set LIDO_PRIVATE_KEY to enable write operations.",
+      );
+    }
+
+    // Approve token spend for withdrawal queue
+    const approveTx = await sdk.withdraw.approval.approvePopulateTx({
       amount: value,
       token,
       account,
-      callback: ({ stage }) => {
-        if (stage === "sign") {
-          console.error("[lido_unstake] Waiting for signature...");
-        }
-      },
     });
+
+    const approveHash = await walletClient.sendTransaction({
+      to: approveTx.to as `0x${string}`,
+      data: approveTx.data as `0x${string}`,
+      account: walletClient.account,
+      chain: walletClient.chain,
+    });
+
+    await publicClient.waitForTransactionReceipt({ hash: approveHash });
+
+    // Submit withdrawal request
+    const hash = await walletClient.sendTransaction({
+      to: populatedTx.to as `0x${string}`,
+      data: populatedTx.data as `0x${string}`,
+      account: walletClient.account,
+      chain: walletClient.chain,
+    });
+
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
     return toolSuccess({
       dryRun: false,
-      transactionHash: tx.hash,
+      transactionHash: hash,
       description: `Withdrawal request submitted for ${args.amount} ${token}`,
       details: {
+        status: receipt.status,
+        blockNumber: receipt.blockNumber.toString(),
+        approveHash,
         note: "Use lido_withdrawal_status to track. Use lido_claim_withdrawal once finalized.",
       },
     });
@@ -144,6 +162,8 @@ export async function handleWithdrawalStatus(
 
 export async function handleClaimWithdrawal(
   sdk: LidoSDK,
+  publicClient: PublicClient,
+  walletClient: WalletClient | undefined,
   args: {
     account: string;
     request_ids?: string[];
@@ -177,10 +197,16 @@ export async function handleClaimWithdrawal(
       });
     }
 
+    if (!walletClient?.account) {
+      return toolError(
+        "Wallet not configured. Set LIDO_PRIVATE_KEY to enable write operations.",
+      );
+    }
+
+    // Use SDK's claim which handles hints calculation internally
     const tx = await sdk.withdraw.claim.claimRequests({
       requestsIds: requestIds,
       hints: ethInfo.hints,
-      account,
       callback: ({ stage }) => {
         if (stage === "sign") {
           console.error("[lido_claim] Waiting for signature...");
