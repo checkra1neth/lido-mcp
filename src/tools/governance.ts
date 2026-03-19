@@ -102,15 +102,6 @@ export async function handleGovernanceProposals(
   },
 ): Promise<ToolResponse> {
   try {
-    if (
-      networkConfig.contracts.voting ===
-      "0x0000000000000000000000000000000000000000"
-    ) {
-      return toolError(
-        "Governance is not available on this network. Use Ethereum mainnet.",
-      );
-    }
-
     const totalVotes = (await publicClient.readContract({
       address: networkConfig.contracts.voting,
       abi: VOTING_ABI,
@@ -151,15 +142,6 @@ export async function handleGovernanceVote(
   },
 ): Promise<ToolResponse> {
   try {
-    if (
-      networkConfig.contracts.voting ===
-      "0x0000000000000000000000000000000000000000"
-    ) {
-      return toolError(
-        "Governance is not available on this network. Use Ethereum mainnet.",
-      );
-    }
-
     const account = validateAddress(args.account);
     const voteId = BigInt(args.vote_id);
 

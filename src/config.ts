@@ -34,8 +34,8 @@ export const NETWORKS: Record<number, NetworkConfig> = {
       lido: "0x3F1c547b21f65e10480dE3ad8E19fAAC46C95034",
       wstETH: "0x8d09a4502Cc8Cf1547aD300E066060D043f6982D",
       withdrawalQueue: "0xc7cc160b58F8Bb0baC94b80847E2CF2800565C50",
-      voting: "0x0000000000000000000000000000000000000000",
-      ldoToken: "0x0000000000000000000000000000000000000000",
+      voting: "0xdA7d2573Df555002503F29aA4003e398d28cc00f",
+      ldoToken: "0x14ae7daeecdf57034f3E9db8564e46Dba8D97344",
     },
   },
 };
