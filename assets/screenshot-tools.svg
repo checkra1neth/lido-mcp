@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="700" viewBox="0 0 1000 700">
+  <defs>
+    <linearGradient id="bg2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a1628"/>
+      <stop offset="100%" style="stop-color:#0d2137"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1000" height="700" fill="url(#bg2)"/>
+
+  <!-- Terminal window -->
+  <rect x="40" y="30" width="920" height="640" rx="12" fill="#0d1117" stroke="#1a2a3a" stroke-width="2"/>
+
+  <!-- Terminal header -->
+  <rect x="40" y="30" width="920" height="40" rx="12" fill="#161b22"/>
+  <rect x="40" y="58" width="920" height="12" fill="#161b22"/>
+  <circle cx="66" cy="50" r="7" fill="#ff5f57"/>
+  <circle cx="90" cy="50" r="7" fill="#febc2e"/>
+  <circle cx="114" cy="50" r="7" fill="#28c840"/>
+  <text x="500" y="55" font-family="monospace" font-size="13" fill="#8b949e" text-anchor="middle">Lido MCP Server — 11 Tools</text>
+
+  <!-- Section: Read Operations -->
+  <text x="70" y="106" font-family="monospace" font-size="11" fill="#484f58">─── Read Operations ──────────────────────────────────────────────────</text>
+
+  <!-- Balance -->
+  <text x="70" y="132" font-family="monospace" font-size="13" fill="#7ee787">$</text>
+  <text x="86" y="132" font-family="monospace" font-size="13" fill="#c9d1d9">What's my Lido balance?</text>
+  <text x="70" y="155" font-family="monospace" font-size="12" fill="#8b949e">mcp__lido__lido_balance</text>
+  <text x="70" y="178" font-family="monospace" font-size="12" fill="#f0883e">ETH    </text>
+  <text x="140" y="178" font-family="monospace" font-size="12" fill="#c9d1d9">1.4523 ETH</text>
+  <text x="70" y="196" font-family="monospace" font-size="12" fill="#f0883e">stETH  </text>
+  <text x="140" y="196" font-family="monospace" font-size="12" fill="#c9d1d9">3.2001 stETH (shares: 2.8417)</text>
+  <text x="70" y="214" font-family="monospace" font-size="12" fill="#f0883e">wstETH </text>
+  <text x="140" y="214" font-family="monospace" font-size="12" fill="#c9d1d9">0.5000 wstETH</text>
+
+  <!-- APR -->
+  <text x="70" y="246" font-family="monospace" font-size="13" fill="#7ee787">$</text>
+  <text x="86" y="246" font-family="monospace" font-size="13" fill="#c9d1d9">What's the current staking APR?</text>
+  <text x="70" y="269" font-family="monospace" font-size="12" fill="#8b949e">mcp__lido__lido_apr</text>
+  <text x="70" y="292" font-family="monospace" font-size="12" fill="#79c0ff">APR: 3.42% (7-day SMA) | Source: on-chain oracle</text>
+
+  <!-- Section: Write Operations -->
+  <text x="70" y="326" font-family="monospace" font-size="11" fill="#484f58">─── Write Operations (dry_run first, then execute) ──────────────────</text>
+
+  <!-- Stake -->
+  <text x="70" y="352" font-family="monospace" font-size="13" fill="#7ee787">$</text>
+  <text x="86" y="352" font-family="monospace" font-size="13" fill="#c9d1d9">Stake 1 ETH with Lido</text>
+  <text x="70" y="375" font-family="monospace" font-size="12" fill="#8b949e">mcp__lido__lido_stake { amount: "1", dry_run: true }</text>
+  <text x="70" y="398" font-family="monospace" font-size="12" fill="#e3b341">DRY RUN: Stake 1.0 ETH → ~1.0 stETH</text>
+  <text x="70" y="416" font-family="monospace" font-size="12" fill="#8b949e">Gas: ~82,000 | Cost: 0.00041 ETH | To: 0xae7ab...4dF2</text>
+
+  <text x="70" y="446" font-family="monospace" font-size="13" fill="#7ee787">$</text>
+  <text x="86" y="446" font-family="monospace" font-size="13" fill="#c9d1d9">OK, execute it</text>
+  <text x="70" y="469" font-family="monospace" font-size="12" fill="#7ee787">Staked 1.0 ETH → stETH</text>
+  <text x="70" y="487" font-family="monospace" font-size="12" fill="#79c0ff">Tx: 0x0e2074...a8f3 (confirmed, block 3847201)</text>
+
+  <!-- Wrap -->
+  <text x="70" y="519" font-family="monospace" font-size="13" fill="#7ee787">$</text>
+  <text x="86" y="519" font-family="monospace" font-size="13" fill="#c9d1d9">Wrap 0.5 stETH to wstETH for DeFi</text>
+  <text x="70" y="542" font-family="monospace" font-size="12" fill="#8b949e">mcp__lido__lido_wrap { amount: "0.5", dry_run: false }</text>
+  <text x="70" y="565" font-family="monospace" font-size="12" fill="#7ee787">Wrapped 0.5 stETH → 0.4437 wstETH</text>
+  <text x="70" y="583" font-family="monospace" font-size="12" fill="#79c0ff">Tx: 0xe0099e...b71c (confirmed)</text>
+
+  <!-- Governance -->
+  <text x="70" y="617" font-family="monospace" font-size="11" fill="#484f58">─── Governance ───────────────────────────────────────────────────────</text>
+
+  <text x="70" y="643" font-family="monospace" font-size="13" fill="#7ee787">$</text>
+  <text x="86" y="643" font-family="monospace" font-size="13" fill="#c9d1d9">Show active Lido DAO proposals</text>
+  <text x="70" y="662" font-family="monospace" font-size="12" fill="#8b949e">mcp__lido__lido_governance_proposals { status: "active" }</text>
+</svg>
